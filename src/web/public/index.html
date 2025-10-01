@@ -280,6 +280,83 @@
             font-family: 'Courier New', monospace;
         }
 
+        .domain-item {
+            background: #f8f9fa;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+        }
+
+        .domain-item.verified {
+            border-color: #28a745;
+            background: #f0fff4;
+        }
+
+        .domain-item.unverified {
+            border-color: #ffc107;
+            background: #fffef0;
+        }
+
+        .domain-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .domain-name {
+            font-size: 1.1em;
+            font-weight: 600;
+            font-family: 'Courier New', monospace;
+        }
+
+        .domain-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+
+        .badge-verified {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .badge-unverified {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .badge-default {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .domain-details {
+            background: white;
+            padding: 12px;
+            border-radius: 6px;
+            margin: 10px 0;
+            font-size: 0.9em;
+        }
+
+        .domain-details code {
+            background: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            display: block;
+            margin: 5px 0;
+            word-break: break-all;
+        }
+
+        .domain-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
         .copy-btn {
             background: #28a745;
             padding: 6px 12px;
@@ -317,13 +394,44 @@
         <div id="alert-container"></div>
 
         <div class="card">
+            <h2>🌐 Eigene Domains</h2>
+            
+            <div class="info-box">
+                <h3>� Eigene Domain hinzufügen:</h3>
+                <p>1. Fügen Sie Ihre Domain hinzu</p>
+                <p>2. Erstellen Sie einen TXT Record mit dem Verification Token</p>
+                <p>3. Erstellen Sie einen MX Record, der auf diesen Server zeigt</p>
+                <p>4. Klicken Sie auf "Verifizieren"</p>
+            </div>
+
+            <form id="add-domain-form">
+                <div class="form-group">
+                    <label for="custom-domain">Domain:</label>
+                    <input 
+                        type="text" 
+                        id="custom-domain" 
+                        placeholder="ihre-domain.de" 
+                        pattern="[a-zA-Z0-9.-]+"
+                        required
+                    >
+                </div>
+                <button type="submit">Domain hinzufügen</button>
+            </form>
+
+            <div id="domains-list" style="margin-top: 20px;">
+                <h3 style="color: #667eea; margin-bottom: 15px;">Ihre Domains:</h3>
+                <div id="domains-container"></div>
+            </div>
+        </div>
+
+        <div class="card">
             <h2>Neuer E-Mail Hook</h2>
             
             <div class="info-box">
                 <h3>🚀 So funktioniert's:</h3>
                 <p>1. Erstellen Sie einen E-Mail Hook mit Ihrer Webhook-URL</p>
-                <p>2. Konfigurieren Sie Ihren MX Record auf diesen Server</p>
-                <p>3. E-Mails an die generierte Adresse werden an Ihren Webhook gesendet</p>
+                <p>2. E-Mails an die generierte Adresse werden an Ihren Webhook gesendet</p>
+                <p>3. Verwenden Sie Standard-Domains oder Ihre eigenen verifizierten Domains</p>
             </div>
 
             <form id="create-hook-form">
@@ -407,7 +515,7 @@
             });
         }
 
-        // Load configuration
+        // Load configuration and domains
         async function loadConfig() {
             try {
                 const response = await fetch(`${API_BASE}/config`);
@@ -416,16 +524,166 @@
                 const domainSelect = document.getElementById('domain');
                 domainSelect.innerHTML = '';
                 
-                config.allowedDomains.forEach(domain => {
-                    const option = document.createElement('option');
-                    option.value = domain;
-                    option.textContent = domain;
-                    domainSelect.appendChild(option);
-                });
+                // Add default domains
+                if (config.defaultDomains && config.defaultDomains.length > 0) {
+                    const defaultGroup = document.createElement('optgroup');
+                    defaultGroup.label = 'Standard-Domains';
+                    config.defaultDomains.forEach(domain => {
+                        const option = document.createElement('option');
+                        option.value = domain;
+                        option.textContent = domain;
+                        defaultGroup.appendChild(option);
+                    });
+                    domainSelect.appendChild(defaultGroup);
+                }
+                
+                // Add custom verified domains
+                const customDomains = config.customDomains?.filter(d => d.isVerified) || [];
+                if (customDomains.length > 0) {
+                    const customGroup = document.createElement('optgroup');
+                    customGroup.label = 'Eigene Domains';
+                    customDomains.forEach(domain => {
+                        const option = document.createElement('option');
+                        option.value = domain.domain;
+                        option.textContent = domain.domain;
+                        customGroup.appendChild(option);
+                    });
+                    domainSelect.appendChild(customGroup);
+                }
+
+                // Load custom domains list
+                loadDomains(config.customDomains || []);
             } catch (error) {
                 showAlert('Fehler beim Laden der Konfiguration', 'error');
             }
         }
+
+        // Load domains list
+        function loadDomains(domains) {
+            const container = document.getElementById('domains-container');
+            
+            if (domains.length === 0) {
+                container.innerHTML = '<p style="color: #999;">Noch keine eigenen Domains hinzugefügt.</p>';
+                return;
+            }
+
+            container.innerHTML = '';
+            domains.forEach(domain => {
+                const domainElement = createDomainElement(domain);
+                container.appendChild(domainElement);
+            });
+        }
+
+        // Create domain element
+        function createDomainElement(domain) {
+            const div = document.createElement('div');
+            div.className = `domain-item ${domain.isVerified ? 'verified' : 'unverified'}`;
+            
+            const verificationInstructions = !domain.isVerified ? `
+                <div class="domain-details">
+                    <strong>📋 Verifizierung:</strong>
+                    <p style="margin: 5px 0;">1. Erstellen Sie einen TXT Record:</p>
+                    <code>mailhook-verify=${domain.verificationToken}</code>
+                    <p style="margin: 5px 0;">2. Erstellen Sie einen MX Record:</p>
+                    <code>${domain.mxRecord}</code>
+                    <p style="margin: 5px 0; color: #666; font-size: 0.9em;">
+                        Nach dem Setzen der DNS Records klicken Sie auf "Verifizieren"
+                    </p>
+                </div>
+            ` : '';
+
+            div.innerHTML = `
+                <div class="domain-header">
+                    <div class="domain-name">${domain.domain}</div>
+                    <span class="domain-badge ${domain.isVerified ? 'badge-verified' : 'badge-unverified'}">
+                        ${domain.isVerified ? '✓ Verifiziert' : '⏳ Nicht verifiziert'}
+                    </span>
+                </div>
+                ${verificationInstructions}
+                <div class="domain-actions">
+                    ${!domain.isVerified ? `
+                        <button class="btn-small" onclick="verifyDomain('${domain.id}')">
+                            🔍 Verifizieren
+                        </button>
+                    ` : ''}
+                    <button class="btn-small copy-btn" onclick="copyToClipboard('mailhook-verify=${domain.verificationToken}')">
+                        📋 TXT kopieren
+                    </button>
+                    <button class="btn-small btn-danger" onclick="deleteDomain('${domain.id}', '${domain.domain}')">
+                        🗑️ Löschen
+                    </button>
+                </div>
+            `;
+            return div;
+        }
+
+        // Add custom domain
+        document.getElementById('add-domain-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const domain = document.getElementById('custom-domain').value;
+
+            try {
+                const response = await fetch(`${API_BASE}/domains`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ domain })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error);
+                }
+
+                showAlert('Domain erfolgreich hinzugefügt! Bitte verifizieren Sie die Domain.', 'success');
+                document.getElementById('add-domain-form').reset();
+                loadConfig();
+            } catch (error) {
+                showAlert(error.message, 'error');
+            }
+        });
+
+        // Verify domain
+        window.verifyDomain = async function(domainId) {
+            try {
+                const response = await fetch(`${API_BASE}/domains/${domainId}/verify`, {
+                    method: 'POST'
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error || 'Verifizierung fehlgeschlagen');
+                }
+
+                showAlert(result.message || 'Domain erfolgreich verifiziert!', 'success');
+                loadConfig();
+            } catch (error) {
+                showAlert(error.message, 'error');
+            }
+        };
+
+        // Delete domain
+        window.deleteDomain = async function(domainId, domainName) {
+            if (!confirm(`Möchten Sie die Domain ${domainName} wirklich löschen?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/domains/${domainId}`, {
+                    method: 'DELETE'
+                });
+
+                if (!response.ok) throw new Error('Fehler beim Löschen');
+
+                showAlert('Domain erfolgreich gelöscht', 'success');
+                loadConfig();
+            } catch (error) {
+                showAlert(error.message, 'error');
+            }
+        };
 
         // Load hooks
         async function loadHooks() {

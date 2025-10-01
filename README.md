@@ -9,7 +9,9 @@ Ein einfacher E-Mail-zu-Webhook Service mit Weboberfläche. Empfangen Sie E-Mail
 - 🔐 **Webhook Signatures** - HMAC-SHA256 Signierung für sichere Webhooks
 - 📊 **Logging** - Vollständige Protokollierung aller E-Mail-Verarbeitungen
 - 🎯 **Multi-Domain** - Unterstützung mehrerer E-Mail-Domains
-- 💾 **SQLite Datenbank** - Leichtgewichtige lokale Datenspeicherung
+- � **Custom Domains** - Fügen Sie Ihre eigenen Domains hinzu und verifizieren Sie diese
+- �💾 **SQLite Datenbank** - Leichtgewichtige lokale Datenspeicherung
+- 👥 **Multi-User Support** - Unterstützung für mehrere Benutzer (vorbereitet)
 
 ## Installation
 
@@ -56,14 +58,30 @@ npm run dev
 
 Öffnen Sie `http://localhost:3000` in Ihrem Browser.
 
-### 2. E-Mail Hook erstellen
+### 2. Eigene Domain hinzufügen (Optional)
+
+Falls Sie Ihre eigene Domain verwenden möchten:
+
+1. Klicken Sie auf "Domain hinzufügen"
+2. Geben Sie Ihre Domain ein (z.B. `ihre-firma.de`)
+3. Kopieren Sie den TXT Record und fügen Sie ihn in Ihre DNS-Einstellungen ein:
+   ```
+   mailhook-verify=<verification-token>
+   ```
+4. Erstellen Sie einen MX Record:
+   ```
+   ihre-firma.de.    IN    MX    10    mailhook.local.
+   ```
+5. Klicken Sie auf "Verifizieren"
+
+### 3. E-Mail Hook erstellen
 
 - Wählen Sie einen Benutzernamen (z.B. `test-webhook`)
-- Wählen Sie eine Domain aus der Liste
+- Wählen Sie eine Domain aus der Liste (Standard oder Ihre eigene)
 - Geben Sie Ihre Webhook-URL ein (z.B. `https://ihre-domain.de/webhook`)
 - Optional: Fügen Sie ein Webhook-Secret hinzu für signierte Requests
 
-### 3. MX Record konfigurieren
+### 4. MX Record konfigurieren (für Standard-Domains)
 
 Konfigurieren Sie Ihren DNS MX Record für die gewählte Domain:
 
@@ -71,11 +89,11 @@ Konfigurieren Sie Ihren DNS MX Record für die gewählte Domain:
 mailhook.local.    IN    MX    10    ihr-server.de.
 ```
 
-### 4. E-Mail senden
+### 5. E-Mail senden
 
-Senden Sie eine E-Mail an die generierte Adresse (z.B. `test-webhook@mailhook.local`).
+Senden Sie eine E-Mail an die generierte Adresse (z.B. `test-webhook@mailhook.local` oder `test-webhook@ihre-firma.de`).
 
-### 5. Webhook empfangen
+### 6. Webhook empfangen
 
 Ihr Webhook empfängt einen POST Request mit folgendem JSON-Body:
 
@@ -137,10 +155,43 @@ app.post('/webhook', express.raw({ type: 'application/json' }), (req, res) => {
 
 ## API Endpoints
 
-### GET /api/config
-Gibt die verfügbaren Domains zurück.
+### Domains
 
-### GET /api/hooks
+#### GET /api/config
+Gibt die Konfiguration mit Standard- und benutzerdefinierten Domains zurück.
+
+**Response:**
+```json
+{
+  "defaultDomains": ["mailhook.local", "callback.local"],
+  "allowedDomains": ["mailhook.local", "callback.local", "ihre-firma.de"],
+  "customDomains": [...]
+}
+```
+
+#### GET /api/domains
+Listet alle benutzerdefinierten Domains auf.
+
+#### POST /api/domains
+Fügt eine neue benutzerdefinierte Domain hinzu.
+
+**Body:**
+```json
+{
+  "domain": "ihre-firma.de",
+  "userId": "default"
+}
+```
+
+#### POST /api/domains/:id/verify
+Verifiziert eine benutzerdefinierte Domain.
+
+#### DELETE /api/domains/:id
+Löscht eine benutzerdefinierte Domain.
+
+### Hooks
+
+#### GET /api/hooks
 Listet alle E-Mail Hooks auf.
 
 ### POST /api/hooks

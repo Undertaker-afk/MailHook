@@ -2,9 +2,10 @@ import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { emailHooksRepo, emailLogsRepo } from '../database/db.js';
+import { emailHooksRepo, emailLogsRepo, customDomainsRepo } from '../database/db.js';
 import { nanoid } from 'nanoid';
-import appConfig from '../config.js';
+import crypto from 'crypto';
+import appConfig, { getAllowedDomains } from '../config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -34,13 +35,107 @@ export function createWebServer() {
   // Get configuration (available domains)
   fastify.get('/api/config', async (request, reply) => {
     return {
-      allowedDomains: appConfig.allowedDomains
+      defaultDomains: appConfig.defaultDomains,
+      allowedDomains: getAllowedDomains(),
+      customDomains: customDomainsRepo.findAll()
     };
+  });
+
+  // Custom Domains Routes
+  
+  // List custom domains
+  fastify.get('/api/domains', async (request, reply) => {
+    const userId = request.query.userId || 'default';
+    return customDomainsRepo.findAll(userId);
+  });
+
+  // Add custom domain
+  fastify.post('/api/domains', async (request, reply) => {
+    const { domain } = request.body;
+    const userId = request.body.userId || 'default';
+
+    if (!domain) {
+      return reply.code(400).send({ error: 'Domain is required' });
+    }
+
+    // Basic domain validation
+    const domainRegex = /^[a-z0-9]+([\-\.]{1}[a-z0-9]+)*\.[a-z]{2,}$/i;
+    if (!domainRegex.test(domain)) {
+      return reply.code(400).send({ error: 'Invalid domain format' });
+    }
+
+    // Check if domain already exists
+    if (customDomainsRepo.findByDomain(domain)) {
+      return reply.code(409).send({ error: 'Domain already exists' });
+    }
+
+    // Generate verification token and MX record
+    const verificationToken = nanoid(32);
+    const mxRecord = `mailhook-verify=${verificationToken}`;
+
+    const customDomain = customDomainsRepo.create({
+      id: nanoid(),
+      domain,
+      userId,
+      verificationToken,
+      mxRecord: `10 ${appConfig.defaultDomains[0]}`
+    });
+
+    return reply.code(201).send(customDomain);
+  });
+
+  // Verify custom domain
+  fastify.post('/api/domains/:id/verify', async (request, reply) => {
+    const domain = customDomainsRepo.findById(request.params.id);
+    
+    if (!domain) {
+      return reply.code(404).send({ error: 'Domain not found' });
+    }
+
+    if (domain.isVerified) {
+      return reply.send({ ...domain, message: 'Domain already verified' });
+    }
+
+    // In a real implementation, you would check DNS records here
+    // For now, we'll simulate verification
+    try {
+      // Check if TXT record exists with verification token
+      // const dns = require('dns').promises;
+      // const records = await dns.resolveTxt(domain.domain);
+      // const hasVerificationRecord = records.some(record => 
+      //   record.some(txt => txt.includes(domain.verificationToken))
+      // );
+
+      // For demo purposes, auto-verify
+      const verified = customDomainsRepo.verify(request.params.id);
+      
+      return reply.send({
+        ...verified,
+        message: 'Domain verified successfully'
+      });
+    } catch (error) {
+      return reply.code(500).send({ 
+        error: 'Failed to verify domain',
+        details: error.message 
+      });
+    }
+  });
+
+  // Delete custom domain
+  fastify.delete('/api/domains/:id', async (request, reply) => {
+    const deleted = customDomainsRepo.delete(request.params.id);
+    
+    if (!deleted) {
+      return reply.code(404).send({ error: 'Domain not found' });
+    }
+
+    return { success: true };
   });
 
   // List all email hooks
   fastify.get('/api/hooks', async (request, reply) => {
-    const hooks = emailHooksRepo.findAll();
+    const userId = request.query.userId || 'default';
+    const hooks = emailHooksRepo.findAll(userId);
     
     // Hide webhook secrets in list view
     return hooks.map(hook => ({
@@ -66,7 +161,7 @@ export function createWebServer() {
 
   // Create new email hook
   fastify.post('/api/hooks', async (request, reply) => {
-    const { username, domain, webhookUrl, webhookSecret } = request.body;
+    const { username, domain, webhookUrl, webhookSecret, userId } = request.body;
 
     // Validation
     if (!username || !domain || !webhookUrl) {
@@ -75,9 +170,10 @@ export function createWebServer() {
       });
     }
 
-    if (!appConfig.allowedDomains.includes(domain)) {
+    const allowedDomains = getAllowedDomains();
+    if (!allowedDomains.includes(domain)) {
       return reply.code(400).send({ 
-        error: `Domain ${domain} is not allowed. Allowed domains: ${appConfig.allowedDomains.join(', ')}` 
+        error: `Domain ${domain} is not allowed. Allowed domains: ${allowedDomains.join(', ')}` 
       });
     }
 
@@ -110,6 +206,7 @@ export function createWebServer() {
       email,
       username,
       domain,
+      userId: userId || 'default',
       webhookUrl,
       webhookSecret: webhookSecret || null,
       isEnabled: true

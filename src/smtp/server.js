@@ -3,7 +3,7 @@ import { simpleParser } from 'mailparser';
 import { emailHooksRepo, emailLogsRepo } from '../database/db.js';
 import { triggerWebhook } from '../webhook/webhook.js';
 import { nanoid } from 'nanoid';
-import appConfig from '../config.js';
+import { getAllowedDomains } from '../config.js';
 
 export function createSMTPServer() {
   const server = new SMTPServer({
@@ -28,8 +28,9 @@ export function createSMTPServer() {
       const recipientEmail = address.address.toLowerCase();
       const domain = recipientEmail.split('@')[1];
 
-      // Check if domain is allowed
-      if (!appConfig.allowedDomains.includes(domain)) {
+      // Check if domain is allowed (default + custom verified domains)
+      const allowedDomains = getAllowedDomains();
+      if (!allowedDomains.includes(domain)) {
         return callback(new Error(`Domain ${domain} not allowed`));
       }
 

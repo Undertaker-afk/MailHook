@@ -1,0 +1,33 @@
+{
+  "name": "mailhook",
+  "version": "1.0.0",
+  "description": "Simple SMTP to Webhook service with web interface",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "migrate": "node src/database/migrate.js"
+  },
+  "keywords": [
+    "smtp",
+    "webhook",
+    "email"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "fastify": "^4.26.2",
+    "@fastify/static": "^7.0.1",
+    "mailparser": "^3.6.9",
+    "smtp-server": "^3.13.4",
+    "better-sqlite3": "^9.4.3",
+    "nanoid": "^5.0.6",
+    "ofetch": "^1.3.4",
+    "dotenv": "^16.4.5",
+    "pino-pretty": "^11.0.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.9"
+  }
+}
